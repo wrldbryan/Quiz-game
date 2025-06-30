@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smart Quiz Game</title>
+<style>
+  /* Simple responsive style */
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0; padding: 0;
+    background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+    color: #333;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+  }
+  #container {
+    background: white;
+    max-width: 400px;
+    width: 100%;
+    padding: 20px 30px;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  }
+  h1 {
+    margin-top: 0;
+    text-align: center;
+  }
+  input[type=email], input[type=password], input[type=text] {
+    width: 100%;
+    padding: 10px 12px;
+    margin: 8px 0 16px 0;
+    border: 1px solid #aaa;
+    border-radius: 6px;
+    font-size: 16px;
+  }
+  button {
+    width: 100%;
+    background-color: #3399ff;
+    border: none;
+    padding: 12px;
+    font-size: 16px;
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover {
+    background-color: #267acc;
+  }
+  .error {
+    color: red;
+    margin-bottom: 12px;
+  }
+  .hidden {
+    display: none;
+  }
+  #quiz, #results {
+    text-align: center;
+  }
+  #question {
+    font-size: 20px;
+    margin-bottom: 20px;
+  }
+  .option-btn {
+    width: 100%;
+    padding: 10px 12px;
+    margin: 6px 0;
+    border-radius: 6px;
+    border: 1px solid #3399ff;
+    background: white;
+    color: #333; /* FIX: ensure button text is visible */
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .option-btn:hover {
+    background-color: #cce4ff;
+  }
+  #timer {
+    font-weight: bold;
+    margin-bottom: 15px;
+  }
+  #leaderboard {
+    margin-top: 20px;
+    text-align: left;
+  }
+  #leaderboard table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  #leaderboard th, #leaderboard td {
+    border: 1px solid #ddd;
+    padding: 8px;
+  }
+  #leaderboard th {
+    background-color: #3399ff;
+    color: white;
+  }
+  @media (max-width: 450px) {
+    #container {
+      max-width: 100%;
+      padding: 15px 20px;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="container">
+
+<!-- SIGNUP / LOGIN -->
+<div id="auth">
+  <h1>Smart Quiz Game</h1>
+  <div id="auth-error" class="error"></div>
+  <div id="signup-section">
+    <h2>Sign Up</h2>
+    <input id="signup-name" type="text" placeholder="Your name" />
+    <input id="signup-email" type="email" placeholder="Email" />
+    <input id="signup-password" type="password" placeholder="Password (min 6 chars)" />
+    <button id="signup-btn">Sign Up</button>
+    <p>Already have an account? <a href="#" id="show-login">Login here</a></p>
+  </div>
+  <div id="login-section" class="hidden">
+    <h2>Login</h2>
+    <input id="login-email" type="email" placeholder="Email" />
+    <input id="login-password" type="password" placeholder="Password" />
+    <button id="login-btn">Login</button>
+    <p>Don't have an account? <a href="#" id="show-signup">Sign up here</a></p>
+  </div>
+</div>
+
+<!-- QUIZ -->
+<div id="quiz" class="hidden">
+  <h1>Quiz Time!</h1>
+  <div id="timer">Time: 0s</div>
+  <div id="question"></div>
+  <div id="options"></div>
+  <button id="logout-quiz" style="margin-top: 15px; background: #f44336;">Logout</button>
+</div>
+
+<!-- RESULTS -->
+<div id="results" class="hidden">
+  <h1>Results</h1>
+  <p id="result-msg"></p>
+  <p><strong>Your time:</strong> <span id="result-time"></span> seconds</p>
+  <button id="restart-btn" style="margin-bottom:15px;">Play Again</button>
+  <button id="logout-results" style="background: #f44336;">Logout</button>
+  <div id="leaderboard">
+    <h2>Leaderboard</h2>
+    <table>
+      <thead><tr><th>Rank</th><th>Name</th><th>Progress</th><th>Time (seconds)</th></tr></thead>
+      <tbody id="leaderboard-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const usersKey = "smartQuizUsers";
+  const leaderboardKey = "smartQuizLeaderboard";
+
+  function loadUsers() {
+    return JSON.parse(localStorage.getItem(usersKey) || "{}");
+  }
+  function saveUsers(users) {
+    localStorage.setItem(usersKey, JSON.stringify(users));
+  }
+  function loadLeaderboard() {
+    return JSON.parse(localStorage.getItem(leaderboardKey) || "[]");
+  }
+  function saveLeaderboard(lb) {
+    localStorage.setItem(leaderboardKey, JSON.stringify(lb));
+  }
+
+  let currentUser = null;
+
+  const authDiv = document.getElementById("auth");
+  const signupSection = document.getElementById("signup-section");
+  const loginSection = document.getElementById("login-section");
+  const authErrorDiv = document.getElementById("auth-error");
+
+  const signupName = document.getElementById("signup-name");
+  const signupEmail = document.getElementById("signup-email");
+  const signupPassword = document.getElementById("signup-password");
+  const signupBtn = document.getElementById("signup-btn");
+  const showLoginLink = document.getElementById("show-login");
+
+  const loginEmail = document.getElementById("login-email");
+  const loginPassword = document.getElementById("login-password");
+  const loginBtn = document.getElementById("login-btn");
+  const showSignupLink = document.getElementById("show-signup");
+
+  const quizDiv = document.getElementById("quiz");
+  const timerDiv = document.getElementById("timer");
+  const questionDiv = document.getElementById("question");
+  const optionsDiv = document.getElementById("options");
+  const logoutQuizBtn = document.getElementById("logout-quiz");
+
+  const resultsDiv = document.getElementById("results");
+  const resultMsg = document.getElementById("result-msg");
+  const resultTimeSpan = document.getElementById("result-time");
+  const restartBtn = document.getElementById("restart-btn");
+  const logoutResultsBtn = document.getElementById("logout-results");
+
+  const leaderboardBody = document.getElementById("leaderboard-body");
+
+  const questions = [
+    {q:"What is 8 x 7?", options:["54","56","49","63"], answer:"56"},
+    {q:"What planet is known as the Red Planet?", options:["Earth","Mars","Jupiter","Venus"], answer:"Mars"},
+    {q:"What is the capital city of France?", options:["Paris","Berlin","Rome","Madrid"], answer:"Paris"},
+    {q:"Which gas do plants absorb from the air?", options:["Oxygen","Nitrogen","Carbon Dioxide","Helium"], answer:"Carbon Dioxide"},
+    {q:"What is the square root of 81?", options:["7","9","8","6"], answer:"9"},
+    {q:"Which ocean is the largest?", options:["Atlantic","Indian","Arctic","Pacific"], answer:"Pacific"},
+    {q:"What do bees collect from flowers?", options:["Honey","Nectar","Pollen","Water"], answer:"Nectar"},
+    {q:"How many continents are there on Earth?", options:["5","6","7","8"], answer:"7"},
+    {q:"Who wrote 'Romeo and Juliet'?", options:["Shakespeare","Dickens","Hemingway","Tolstoy"], answer:"Shakespeare"},
+    {q:"What is the boiling point of water in Celsius?", options:["90°C","80°C","100°C","110°C"], answer:"100°C"},
+    {q:"What is the process by which plants make food?", options:["Digestion","Photosynthesis","Respiration","Transpiration"], answer:"Photosynthesis"},
+    {q:"Which instrument has keys, pedals and strings?", options:["Guitar","Piano","Violin","Drums"], answer:"Piano"}
+  ];
+
+  function shuffleArray(arr) {
+    let a = arr.slice();
+    for (let i = a.length -1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i+1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  showLoginLink.addEventListener("click", e => {
+    e.preventDefault();
+    signupSection.classList.add("hidden");
+    loginSection.classList.remove("hidden");
+    authErrorDiv.textContent = "";
+  });
+  showSignupLink.addEventListener("click", e => {
+    e.preventDefault();
+    loginSection.classList.add("hidden");
+    signupSection.classList.remove("hidden");
+    authErrorDiv.textContent = "";
+  });
+
+  signupBtn.addEventListener("click", () => {
+    authErrorDiv.textContent = "";
+    const name = signupName.value.trim();
+    const email = signupEmail.value.trim().toLowerCase();
+    const pass = signupPassword.value;
+
+    if (!name) {
+      authErrorDiv.textContent = "Please enter your name.";
+      return;
+    }
+    if (!email.includes("@")) {
+      authErrorDiv.textContent = "Please enter a valid email.";
+      return;
+    }
+    if (pass.length < 6) {
+      authErrorDiv.textContent = "Password must be at least 6 characters.";
+      return;
+    }
+
+    const users = loadUsers();
+    if (users[email]) {
+      authErrorDiv.textContent = "Email already registered. Please login.";
+      return;
+    }
+    users[email] = { name, password: pass };
+    saveUsers(users);
+    alert("Sign up successful! You can now login.");
+    signupName.value = "";
+    signupEmail.value = "";
+    signupPassword.value = "";
+    signupSection.classList.add("hidden");
+    loginSection.classList.remove("hidden");
+  });
+
+  loginBtn.addEventListener("click", () => {
+    authErrorDiv.textContent = "";
+    const email = loginEmail.value.trim().toLowerCase();
+    const pass = loginPassword.value;
+    if (!email.includes("@")) {
+      authErrorDiv.textContent = "Please enter a valid email.";
+      return;
+    }
+    if (!pass) {
+      authErrorDiv.textContent = "Please enter your password.";
+      return;
+    }
+    const users = loadUsers();
+    if (!users[email]) {
+      authErrorDiv.textContent = "Email not registered.";
+      return;
+    }
+    if (users[email].password !== pass) {
+      authErrorDiv.textContent = "Incorrect password.";
+      return;
+    }
+    currentUser = email;
+    loginEmail.value = "";
+    loginPassword.value = "";
+    startQuiz();
+  });
+
+  let quizQuestions = [];
+  let currentQIndex = 0;
+  let startTime = 0;
+  let timerInterval;
+
+  function startQuiz() {
+    authDiv.classList.add("hidden");
+    resultsDiv.classList.add("hidden");
+    quizDiv.classList.remove("hidden");
+    quizQuestions = shuffleArray(questions);
+    currentQIndex = 0;
+    startTime = Date.now();
+    timerDiv.textContent = "Time: 0s";
+    renderQuestion();
+
+    timerInterval = setInterval(() => {
+      const seconds = Math.floor((Date.now() - startTime)/1000);
+      timerDiv.textContent = `Time: ${seconds}s`;
+    }, 1000);
+  }
+
+  function renderQuestion() {
+    if (currentQIndex >= quizQuestions.length) {
+      endQuiz(true);
+      return;
+    }
+    const q = quizQuestions[currentQIndex];
+    questionDiv.textContent = q.q;
+    optionsDiv.innerHTML = "";
+    q.options.forEach(opt => {
+      const btn = document.createElement("button");
+      btn.textContent = opt;
+      btn.className = "option-btn";
+      btn.onclick = () => {
+        if (opt === q.answer) {
+          currentQIndex++;
+          renderQuestion();
+        } else {
+          endQuiz(false);
+        }
+      };
+      optionsDiv.appendChild(btn);
+    });
+  }
+
+  // Updated endQuiz:
+  function endQuiz(won) {
+    clearInterval(timerInterval);
+    quizDiv.classList.add("hidden");
+    resultsDiv.classList.remove("hidden");
+
+    const timeSeconds = Math.floor((Date.now() - startTime)/1000);
+    resultTimeSpan.textContent = timeSeconds;
+
+    const users = loadUsers();
+    const userName = users[currentUser].name;
+
+    let lb = loadLeaderboard();
+
+    if (won) {
+      resultMsg.textContent = `Congratulations, ${userName}! You answered all questions correctly.`;
+      addToLeaderboard(userName, timeSeconds, questions.length);
+    } else {
+      addToLeaderboard(userName, timeSeconds, currentQIndex);
+
+      // Count how many people got progress >= currentQIndex
+      // Include the current user count (+1)
+      const progressCount = lb.filter(e => e.progress >= currentQIndex).length + 1;
+
+      // Sort leaderboard by progress desc, time asc including current user entry
+      const tempLB = lb.concat({name: userName, time: timeSeconds, progress: currentQIndex});
+      tempLB.sort((a,b) => {
+        if (b.progress !== a.progress) return b.progress - a.progress;
+        return a.time - b.time;
+      });
+
+      const userRank = tempLB.findIndex(e =>
+        e.name === userName && e.time === timeSeconds && e.progress === currentQIndex
+      ) + 1;
+
+      let rankMsg = "";
+      if (userRank <= 100) {
+        rankMsg = `You are ranked #${userRank} among all players.`;
+      } else {
+        rankMsg = `You made it to rank #${userRank}, which is beyond the top 100.`;
+      }
+
+      resultMsg.innerHTML = `
+        Oops, wrong answer. You answered <strong>${currentQIndex}</strong> question${currentQIndex!==1?"s":""} correctly.<br>
+        So far, <strong>${progressCount}</strong> player${progressCount!==1?"s":""} made it this far or farther.<br>
+        ${rankMsg}
+      `;
+    }
+    showLeaderboard();
+  }
+
+  // Update addToLeaderboard:
+  function addToLeaderboard(name, time, progress=questions.length) {
+    let lb = loadLeaderboard();
+    lb.push({ name, time, progress });
+    lb.sort((a,b) => {
+      if (b.progress !== a.progress) return b.progress - a.progress;
+      return a.time - b.time;
+    });
+    if (lb.length > 100) lb = lb.slice(0,100);
+    saveLeaderboard(lb);
+  }
+
+  function showLeaderboard() {
+    const lb = loadLeaderboard();
+    leaderboardBody.innerHTML = "";
+    lb.forEach((entry, i) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${i+1}</td><td>${entry.name}</td><td>${entry.progress}/${questions.length}</td><td>${entry.time}</td>`;
+      leaderboardBody.appendChild(tr);
+    });
+  }
+
+  restartBtn.addEventListener("click", () => {
+    startQuiz();
+  });
+
+  logoutQuizBtn.addEventListener("click", () => {
+    logout();
+  });
+  logoutResultsBtn.addEventListener("click", () => {
+    logout();
+  });
+
+  function logout() {
+    currentUser = null;
+    clearInterval(timerInterval);
+    resultsDiv.classList.add("hidden");
+    quizDiv.classList.add("hidden");
+    authDiv.classList.remove("hidden");
+    authErrorDiv.textContent = "";
+    signupSection.classList.remove("hidden");
+    loginSection.classList.add("hidden");
+  }
+
+  window.onload = () => {
+    logout();
+  };
+</script>
+</body>
+</html>
